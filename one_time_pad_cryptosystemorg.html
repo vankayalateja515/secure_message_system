@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantumPad // One-Time Pad Cryptosystem</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            900: '#030712',
+                            800: '#0b0f19',
+                            700: '#111827',
+                            600: '#1f2937',
+                            500: '#374151',
+                            green: '#10b981',
+                            cyan: '#06b6d4',
+                            accent: '#34d399',
+                            danger: '#f43f5e',
+                            warning: '#f59e0b'
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@300;400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Custom glowing scrollbars & effects */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1f2937;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #374151;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.15);
+        }
+        .glow-green {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+        }
+    </style>
+</head>
+<body class="bg-cyber-900 text-gray-100 min-h-screen flex flex-col selection:bg-cyber-green selection:text-black">
+
+    <header class="border-b border-gray-800 bg-cyber-800/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-cyber-cyan to-cyber-green flex items-center justify-center text-black font-bold font-mono text-lg shadow-lg">
+                    ⚡
+                </div>
+                <div>
+                    <h1 class="font-mono font-bold tracking-wider text-lg bg-gradient-to-r from-cyber-cyan to-cyber-green bg-clip-text text-transparent">
+                        QUANTUMPAD_OTP
+                    </h1>
+                    <p class="text-xs text-gray-400 font-mono">Information-Theoretically Secure Cipher</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-mono bg-cyber-green/10 text-cyber-green border border-cyber-green/20">
+                    <span class="w-1.5 h-1.5 rounded-full bg-cyber-green animate-pulse mr-1.5"></span>
+                    CSPRNG Active (Web Crypto API)
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        
+        <!-- Tab Navigation -->
+        <div class="flex flex-wrap gap-2 border-b border-gray-800 pb-4 mb-8">
+            <button onclick="switchTab('generator')" id="btn-tab-generator" class="tab-btn px-5 py-2.5 rounded-xl font-mono text-sm font-semibold transition-all duration-200 bg-cyber-cyan text-black shadow-lg glow-cyan flex items-center space-x-2">
+                <span>🔑 Key Generator</span>
+            </button>
+            <button onclick="switchTab('encrypt')" id="btn-tab-encrypt" class="tab-btn px-5 py-2.5 rounded-xl font-mono text-sm font-semibold transition-all duration-200 bg-cyber-700/60 text-gray-300 hover:bg-cyber-700 hover:text-white flex items-center space-x-2">
+                <span>🔒 Encrypt</span>
+            </button>
+            <button onclick="switchTab('decrypt')" id="btn-tab-decrypt" class="tab-btn px-5 py-2.5 rounded-xl font-mono text-sm font-semibold transition-all duration-200 bg-cyber-700/60 text-gray-300 hover:bg-cyber-700 hover:text-white flex items-center space-x-2">
+                <span>🔓 Decrypt</span>
+            </button>
+        </div>
+
+        <!-- TAB 1: KEY GENERATOR -->
+        <div id="tab-generator" class="tab-content space-y-6">
+            <div class="bg-cyber-800/90 border border-gray-800 rounded-2xl p-6 sm:p-8 glow-cyan">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-mono font-bold text-gray-100">Cryptographic Pad Generator</h2>
+                        <p class="text-sm text-gray-400 mt-1">Generate truly random bytes using browser hardware-backed CSPRNG (`crypto.getRandomValues`).</p>
+                    </div>
+                    <div class="p-3 bg-cyber-cyan/10 rounded-xl text-cyber-cyan">
+                        🔒
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                    <div>
+                        <label class="block text-xs font-mono uppercase tracking-wider text-gray-400 mb-2">Key Length (Bytes / Characters)</label>
+                        <div class="flex space-x-3">
+                            <input type="number" id="gen-length" value="64" min="1" max="1048576" 
+                                class="w-full bg-cyber-900 border border-gray-700 rounded-xl px-4 py-3 font-mono text-gray-100 focus:outline-none focus:border-cyber-cyan transition-colors">
+                            <select id="gen-unit" class="bg-cyber-900 border border-gray-700 rounded-xl px-3 py-3 font-mono text-xs text-gray-300 focus:outline-none focus:border-cyber-cyan">
+                                <option value="bytes">Bytes</option>
+                                <option value="kb">KB</option>
+                                <option value="mb">MB</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-mono uppercase tracking-wider text-gray-400 mb-2">Output Format</label>
+                        <select id="gen-format" class="w-full bg-cyber-900 border border-gray-700 rounded-xl px-4 py-3 font-mono text-sm text-gray-100 focus:outline-none focus:border-cyber-cyan">
+                            <option value="hex">Hexadecimal (0-9, a-f)</option>
+                            <option value="base64">Base64</option>
+                            <option value="raw">Raw Binary Bytes</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <button onclick="generateNewKey()" class="px-6 py-3 bg-gradient-to-r from-cyber-cyan to-cyber-green text-black font-mono font-bold rounded-xl hover:opacity-95 transition-opacity shadow-lg flex items-center space-x-2">
+                        <span>⚡ Generate Random Key</span>
+                    </button>
+                    <button onclick="loadKeyIntoEncrypt()" class="px-5 py-3 bg-cyber-700 hover:bg-cyber-600 text-gray-200 font-mono text-sm rounded-xl transition-colors border border-gray-600 flex items-center space-x-2">
+                        <span>📥 Send to Encrypt Tool</span>
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-mono uppercase tracking-wider text-gray-400">Generated Key Output</label>
+                        <span id="gen-stats" class="text-xs font-mono text-cyber-cyan">0 bytes ready</span>
+                    </div>
+                    <div class="relative">
+                        <textarea id="gen-output" readonly rows="5" placeholder="Click 'Generate Random Key' to create a one-time pad..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-xs text-cyber-green focus:outline-none resize-y"></textarea>
+                        <div class="absolute top-3 right-3 flex space-x-2">
+                            <button onclick="copyToClipboard('gen-output', 'Key copied to clipboard!')" class="p-2 bg-cyber-700 hover:bg-cyber-600 rounded-lg text-gray-300 text-xs font-mono transition-colors shadow" title="Copy">
+                                📋 Copy
+                            </button>
+                            <button onclick="downloadKeyFile()" class="p-2 bg-cyber-700 hover:bg-cyber-600 rounded-lg text-gray-300 text-xs font-mono transition-colors shadow" title="Download">
+                                💾 Save
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: ENCRYPT -->
+        <div id="tab-encrypt" class="tab-content hidden space-y-6">
+            <div class="bg-cyber-800/90 border border-gray-800 rounded-2xl p-6 sm:p-8 glow-green">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-mono font-bold text-gray-100">One-Time Pad Encryption</h2>
+                        <p class="text-sm text-gray-400 mt-1">Combine plaintext with an identical length key using byte-by-byte XOR operation.</p>
+                    </div>
+                    <div class="p-3 bg-cyber-green/10 rounded-xl text-cyber-green">
+                        🔒
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Plaintext input -->
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-mono uppercase tracking-wider text-gray-400">Plaintext Message</label>
+                            <span id="enc-plain-len" class="text-xs font-mono text-gray-400">0 chars (0 bytes)</span>
+                        </div>
+                        <textarea id="enc-plaintext" oninput="updateEncryptionMetrics()" rows="6" placeholder="Enter secret message to encrypt..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-sm text-gray-100 focus:outline-none focus:border-cyber-green transition-colors resize-y flex-grow"></textarea>
+                    </div>
+
+                    <!-- Key input -->
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-mono uppercase tracking-wider text-gray-400">One-Time Pad Key</label>
+                            <span id="enc-key-len" class="text-xs font-mono text-cyber-green">0 bytes</span>
+                        </div>
+                        <textarea id="enc-key" oninput="updateEncryptionMetrics()" rows="6" placeholder="Paste key (Hex, Base64, or Raw text) or generate one..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-sm text-cyber-green focus:outline-none focus:border-cyber-green transition-colors resize-y flex-grow"></textarea>
+                        
+                        <div class="mt-2 flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <span id="key-match-badge" class="px-2.5 py-1 rounded-md text-xs font-mono bg-red-500/10 text-red-400 border border-red-500/20">
+                                    ⚠️ Key too short
+                                </span>
+                            </div>
+                            <button onclick="autoGenerateMatchingKey()" class="text-xs font-mono text-cyber-cyan hover:underline">
+                                + Auto-generate matching key
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6 flex items-center space-x-4">
+                    <label class="text-xs font-mono uppercase tracking-wider text-gray-400">Output Ciphertext Encoding:</label>
+                    <select id="enc-output-format" class="bg-cyber-900 border border-gray-700 rounded-xl px-3 py-2 font-mono text-xs text-gray-100 focus:outline-none focus:border-cyber-green">
+                        <option value="hex">Hexadecimal</option>
+                        <option value="base64">Base64</option>
+                    </select>
+                </div>
+
+                <div class="mb-6">
+                    <button onclick="performEncryption()" class="w-full py-4 bg-gradient-to-r from-cyber-green to-cyber-cyan text-black font-mono font-bold rounded-xl hover:opacity-95 transition-opacity shadow-lg flex items-center justify-center space-x-2">
+                        <span>⚡ Execute XOR Encryption</span>
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-mono uppercase tracking-wider text-gray-400">Resulting Ciphertext</label>
+                        <span id="enc-result-stats" class="text-xs font-mono text-gray-400"></span>
+                    </div>
+                    <div class="relative">
+                        <textarea id="enc-output" readonly rows="5" placeholder="Ciphertext will appear here..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-xs text-yellow-400 focus:outline-none resize-y"></textarea>
+                        <div class="absolute top-3 right-3 flex space-x-2">
+                            <button onclick="copyToClipboard('enc-output', 'Ciphertext copied!')" class="p-2 bg-cyber-700 hover:bg-cyber-600 rounded-lg text-gray-300 text-xs font-mono transition-colors shadow">
+                                📋 Copy
+                            </button>
+                            <button onclick="sendToDecryptTab()" class="p-2 bg-cyber-700 hover:bg-cyber-600 rounded-lg text-gray-300 text-xs font-mono transition-colors shadow">
+                                🔓 Send to Decrypt
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: DECRYPT -->
+        <div id="tab-decrypt" class="tab-content hidden space-y-6">
+            <div class="bg-cyber-800/90 border border-gray-800 rounded-2xl p-6 sm:p-8 glow-cyan">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h2 class="text-xl font-mono font-bold text-gray-100">One-Time Pad Decryption</h2>
+                        <p class="text-sm text-gray-400 mt-1">Reverse the XOR cipher using the identical key that was used for encryption.</p>
+                    </div>
+                    <div class="p-3 bg-cyber-cyan/10 rounded-xl text-cyber-cyan">
+                        🔓
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Ciphertext input -->
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-mono uppercase tracking-wider text-gray-400">Ciphertext</label>
+                            <div class="flex space-x-3">
+                                <label class="text-xs font-mono text-gray-400 flex items-center space-x-1 cursor-pointer">
+                                    <input type="radio" name="dec-format" value="hex" checked class="text-cyber-cyan focus:ring-0"> <span>Hex</span>
+                                </label>
+                                <label class="text-xs font-mono text-gray-400 flex items-center space-x-1 cursor-pointer">
+                                    <input type="radio" name="dec-format" value="base64" class="text-cyber-cyan focus:ring-0"> <span>Base64</span>
+                                </label>
+                            </div>
+                        </div>
+                        <textarea id="dec-ciphertext" oninput="updateDecryptionMetrics()" rows="6" placeholder="Paste ciphertext here..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-sm text-yellow-400 focus:outline-none focus:border-cyber-cyan transition-colors resize-y flex-grow"></textarea>
+                    </div>
+
+                    <!-- Key input -->
+                    <div class="flex flex-col">
+                        <div class="flex justify-between items-center mb-2">
+                            <label class="text-xs font-mono uppercase tracking-wider text-gray-400">One-Time Pad Key</label>
+                            <span id="dec-key-len" class="text-xs font-mono text-cyber-cyan">0 bytes</span>
+                        </div>
+                        <textarea id="dec-key" oninput="updateDecryptionMetrics()" rows="6" placeholder="Paste the exact key used during encryption..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-sm text-cyber-green focus:outline-none focus:border-cyber-cyan transition-colors resize-y flex-grow"></textarea>
+                        <div class="mt-2">
+                            <span id="dec-key-match-badge" class="px-2.5 py-1 rounded-md text-xs font-mono bg-red-500/10 text-red-400 border border-red-500/20">
+                                ⚠️ Key too short
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <button onclick="performDecryption()" class="w-full py-4 bg-gradient-to-r from-cyber-cyan to-cyber-green text-black font-mono font-bold rounded-xl hover:opacity-95 transition-opacity shadow-lg flex items-center justify-center space-x-2">
+                        <span>⚡ Execute XOR Decryption</span>
+                    </button>
+                </div>
+
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-mono uppercase tracking-wider text-gray-400">Recovered Plaintext Message</label>
+                        <span id="dec-status" class="text-xs font-mono text-cyber-green"></span>
+                    </div>
+                    <div class="relative">
+                        <textarea id="dec-output" readonly rows="5" placeholder="Recovered message will appear here..."
+                            class="w-full bg-cyber-900 border border-gray-700 rounded-xl p-4 font-mono text-sm text-gray-100 focus:outline-none resize-y"></textarea>
+                        <div class="absolute top-3 right-3">
+                            <button onclick="copyToClipboard('dec-output', 'Plaintext copied!')" class="p-2 bg-cyber-700 hover:bg-cyber-600 rounded-lg text-gray-300 text-xs font-mono transition-colors shadow">
+                                📋 Copy
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 bg-cyber-800 border border-cyber-green text-cyber-green px-4 py-3 rounded-xl font-mono text-xs shadow-2xl flex items-center space-x-2">
+        <span id="toast-msg">Action successful</span>
+    </div>
+
+    <footer class="border-t border-gray-800 bg-cyber-800/40 py-6 mt-12 text-center text-xs font-mono text-gray-500">
+        <p>QUANTUMPAD_OTP // Client-Side Cryptographic Suite. Zero server telemetry. All keys generated locally in browser memory.</p>
+    </footer>
+
+    <script>
+        // --- Tab Management ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.className = "tab-btn px-5 py-2.5 rounded-xl font-mono text-sm font-semibold transition-all duration-200 bg-cyber-700/60 text-gray-300 hover:bg-cyber-700 hover:text-white flex items-center space-x-2";
+            });
+
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            const activeBtn = document.getElementById('btn-tab-' + tabId);
+            activeBtn.className = "tab-btn px-5 py-2.5 rounded-xl font-mono text-sm font-semibold transition-all duration-200 bg-cyber-cyan text-black shadow-lg glow-cyan flex items-center space-x-2";
+        }
+
+        // --- Toast Notifications ---
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        function copyToClipboard(elementId, successMsg) {
+            const textarea = document.getElementById(elementId);
+            textarea.select();
+            textarea.setSelectionRange(0, 999999);
+            try {
+                document.execCommand('copy');
+                showToast(successMsg);
+            } catch (err) {
+                showToast('Failed to copy to clipboard');
+            }
+        }
+
+        // --- Key Generator Logic ---
+        function generateNewKey() {
+            let lengthVal = parseInt(document.getElementById('gen-length').value) || 64;
+            const unit = document.getElementById('gen-unit').value;
+            
+            if (unit === 'kb') lengthVal *= 1024;
+            if (unit === 'mb') lengthVal *= 1024 * 1024;
+
+            if (lengthVal <= 0 || lengthVal > 10 * 1024 * 1024) {
+                showToast('Please specify a length between 1 byte and 10 MB');
+                return;
+            }
+
+            try {
+                const randomBytes = new Uint8Array(lengthVal);
+                window.crypto.getRandomValues(randomBytes);
+
+                const format = document.getElementById('gen-format').value;
+                let outputStr = '';
+
+                if (format === 'hex') {
+                    outputStr = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+                } else if (format === 'base64') {
+                    let binary = '';
+                    const len = randomBytes.byteLength;
+                    for (let i = 0; i < len; i++) {
+                        binary += String.fromCharCode(randomBytes[i]);
+                    }
+                    outputStr = btoa(binary);
+                } else {
+                    // Raw string representation
+                    outputStr = Array.from(randomBytes).map(b => String.fromCharCode(b)).join('');
+                }
+
+                document.getElementById('gen-output').value = outputStr;
+                document.getElementById('gen-stats').innerText = `${lengthVal.toLocaleString()} bytes generated securely`;
+                showToast('Cryptographic random key generated successfully!');
+            } catch (err) {
+                showToast('Error generating random bytes: ' + err.message);
+            }
+        }
+
+        function loadKeyIntoEncrypt() {
+            const keyVal = document.getElementById('gen-output').value;
+            if (!keyVal) {
+                showToast('No key generated yet!');
+                return;
+            }
+            document.getElementById('enc-key').value = keyVal;
+            switchTab('encrypt');
+            updateEncryptionMetrics();
+            showToast('Key loaded into Encryption tool');
+        }
+
+        function downloadKeyFile() {
+            const keyVal = document.getElementById('gen-output').value;
+            if (!keyVal) {
+                showToast('No key to download!');
+                return;
+            }
+            const blob = new Blob([keyVal], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `onetime_pad_${Date.now()}.key`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast('Key file downloaded');
+        }
+
+        // --- Helper: Parse Key Input (Hex, Base64, or Raw String) into Uint8Array ---
+        function parseKeyToBytes(keyStr, expectedLength) {
+            if (!keyStr) return new Uint8Array(0);
+            
+            // Try Hex format first (even length, hex chars)
+            const cleanHex = keyStr.trim().replace(/\s+/g, '');
+            if (/^[0-9a-fA-F]+$/.test(cleanHex) && cleanHex.length % 2 === 0) {
+                try {
+                    const bytes = new Uint8Array(cleanHex.length / 2);
+                    for (let i = 0; i < cleanHex.length; i += 2) {
+                        bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+                    }
+                    return bytes;
+                } catch (e) {
+                    // fallback
+                }
+            }
+
+            // Try Base64
+            if (/^[0-9a-zA-Z+/]+={0,2}$/.test(keyStr.trim()) && keyStr.trim().length % 4 === 0) {
+                try {
+                    const binaryString = atob(keyStr.trim());
+                    const bytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    return bytes;
+                } catch (e) {
+                    // fallback
+                }
+            }
+
+            // Default: raw UTF-8 / ASCII bytes
+            return new TextEncoder().encode(keyStr);
+        }
+
+        // --- Encryption Logic ---
+        function updateEncryptionMetrics() {
+            const plaintext = document.getElementById('enc-plaintext').value;
+            const plainBytes = new TextEncoder().encode(plaintext);
+            
+            document.getElementById('enc-plain-len').innerText = `${plaintext.length} chars (${plainBytes.length} bytes)`;
+
+            const keyInput = document.getElementById('enc-key').value;
+            const keyBytes = parseKeyToBytes(keyInput, plainBytes.length);
+
+            document.getElementById('enc-key-len').innerText = `${keyBytes.length} bytes`;
+
+            const badge = document.getElementById('key-match-badge');
+            if (keyBytes.length >= plainBytes.length && plainBytes.length > 0) {
+                badge.className = "px-2.5 py-1 rounded-md text-xs font-mono bg-cyber-green/10 text-cyber-green border border-cyber-green/20";
+                badge.innerText = "✓ Key length sufficient";
+            } else if (plainBytes.length === 0) {
+                badge.className = "px-2.5 py-1 rounded-md text-xs font-mono bg-gray-800 text-gray-400 border border-gray-700";
+                badge.innerText = "Waiting for plaintext...";
+            } else {
+                badge.className = "px-2.5 py-1 rounded-md text-xs font-mono bg-red-500/10 text-red-400 border border-red-500/20";
+                badge.innerText = `⚠️ Key too short (${keyBytes.length}/${plainBytes.length} bytes)`;
+            }
+        }
+
+        function autoGenerateMatchingKey() {
+            const plaintext = document.getElementById('enc-plaintext').value;
+            const plainBytes = new TextEncoder().encode(plaintext);
+            const needed = Math.max(plainBytes.length, 32);
+
+            const randomBytes = new Uint8Array(needed);
+            window.crypto.getRandomValues(randomBytes);
+
+            const hexKey = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            document.getElementById('enc-key').value = hexKey;
+            updateEncryptionMetrics();
+            showToast(`Generated ${needed}-byte random key (Hex)`);
+        }
+
+        function performEncryption() {
+            const plaintext = document.getElementById('enc-plaintext').value;
+            const keyInput = document.getElementById('enc-key').value;
+
+            if (!plaintext) {
+                showToast('Please enter a plaintext message.');
+                return;
+            }
+            if (!keyInput) {
+                showToast('Please provide an encryption key.');
+                return;
+            }
+
+            const plainBytes = new TextEncoder().encode(plaintext);
+            const keyBytes = parseKeyToBytes(keyInput, plainBytes.length);
+
+            if (keyBytes.length < plainBytes.length) {
+                showToast('Error: Key length is shorter than plaintext length!');
+                return;
+            }
+
+            // XOR operation
+            const cipherBytes = new Uint8Array(plainBytes.length);
+            for (let i = 0; i < plainBytes.length; i++) {
+                cipherBytes[i] = plainBytes[i] ^ keyBytes[i];
+            }
+
+            const format = document.getElementById('enc-output-format').value;
+            let result = '';
+
+            if (format === 'hex') {
+                result = Array.from(cipherBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+            } else {
+                let binary = '';
+                for (let i = 0; i < cipherBytes.byteLength; i++) {
+                    binary += String.fromCharCode(cipherBytes[i]);
+                }
+                result = btoa(binary);
+            }
+
+            document.getElementById('enc-output').value = result;
+            document.getElementById('enc-result-stats').innerText = `${cipherBytes.length} bytes encrypted (${format.toUpperCase()})`;
+            showToast('Encryption completed securely!');
+        }
+
+        function sendToDecryptTab() {
+            const cipher = document.getElementById('enc-output').value;
+            const key = document.getElementById('enc-key').value;
+            if (!cipher) return;
+
+            document.getElementById('dec-ciphertext').value = cipher;
+            document.getElementById('dec-key').value = key;
+            switchTab('decrypt');
+            updateDecryptionMetrics();
+            showToast('Ciphertext and key sent to Decryption tab');
+        }
+
+        // --- Decryption Logic ---
+        function updateDecryptionMetrics() {
+            const keyInput = document.getElementById('dec-key').value;
+            const keyBytes = parseKeyToBytes(keyInput, 0);
+            document.getElementById('dec-key-len').innerText = `${keyBytes.length} bytes`;
+
+            const badge = document.getElementById('dec-key-match-badge');
+            if (keyBytes.length > 0) {
+                badge.className = "px-2.5 py-1 rounded-md text-xs font-mono bg-cyber-green/10 text-cyber-green border border-cyber-green/20";
+                badge.innerText = `✓ Key ready (${keyBytes.length} bytes)`;
+            } else {
+                badge.className = "px-2.5 py-1 rounded-md text-xs font-mono bg-red-500/10 text-red-400 border border-red-500/20";
+                badge.innerText = "⚠️ Enter key";
+            }
+        }
+
+        function performDecryption() {
+            const cipherText = document.getElementById('dec-ciphertext').value.trim();
+            const keyInput = document.getElementById('dec-key').value;
+
+            if (!cipherText) {
+                showToast('Please enter ciphertext to decrypt.');
+                return;
+            }
+            if (!keyInput) {
+                showToast('Please provide the decryption key.');
+                return;
+            }
+
+            const format = document.querySelector('input[name="dec-format"]:checked').value;
+            let cipherBytes;
+
+            try {
+                if (format === 'hex') {
+                    const cleanHex = cipherText.replace(/\s+/g, '');
+                    if (cleanHex.length % 2 !== 0) throw new Error('Invalid hex length');
+                    cipherBytes = new Uint8Array(cleanHex.length / 2);
+                    for (let i = 0; i < cleanHex.length; i += 2) {
+                        cipherBytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+                    }
+                } else {
+                    const binaryString = atob(cipherText);
+                    cipherBytes = new Uint8Array(binaryString.length);
+                    for (let i = 0; i < binaryString.length; i++) {
+                        cipherBytes[i] = binaryString.charCodeAt(i);
+                    }
+                }
+            } catch (err) {
+                showToast('Error parsing ciphertext format: ' + err.message);
+                return;
+            }
+
+            const keyBytes = parseKeyToBytes(keyInput, cipherBytes.length);
+            if (keyBytes.length < cipherBytes.length) {
+                showToast(`Error: Key is too short (${keyBytes.length} bytes) for ciphertext (${cipherBytes.length} bytes)!`);
+                return;
+            }
+
+            // XOR decryption
+            const plainBytes = new Uint8Array(cipherBytes.length);
+            for (let i = 0; i < cipherBytes.length; i++) {
+                plainBytes[i] = cipherBytes[i] ^ keyBytes[i];
+            }
+
+            try {
+                const recovered = new TextDecoder('utf-8', { fatal: true }).decode(plainBytes);
+                document.getElementById('dec-output').value = recovered;
+                document.getElementById('dec-status').innerText = `Successfully decrypted ${plainBytes.length} bytes`;
+                showToast('Decryption successful!');
+            } catch (err) {
+                const fallbackStr = Array.from(plainBytes).map(b => (b >= 32 && b <= 126) ? String.fromCharCode(b) : `\\x${b.toString(16).padStart(2, '0')}`).join('');
+                document.getElementById('dec-output').value = fallbackStr;
+                document.getElementById('dec-status').innerText = 'Decrypted with binary fallback (non-UTF8 bytes)';
+                showToast('Decrypted (Contains binary/non-text data)');
+            }
+        }
+
+        // Initial setup
+        window.onload = function() {
+            updateEncryptionMetrics();
+            updateDecryptionMetrics();
+        };
+    </script>
+</body>
+</html>
